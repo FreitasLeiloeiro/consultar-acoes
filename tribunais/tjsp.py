@@ -1,5 +1,10 @@
 import requests
 from bs4 import BeautifulSoup
+import time
+
+# -------------------------------
+# FUNÇÃO PARA EXTRAIR AUTOR E RÉU
+# -------------------------------
 
 def extrair_partes(link):
 
@@ -32,6 +37,9 @@ def extrair_partes(link):
     except:
         return "", ""
 
+# -------------------------------
+# FUNÇÃO PRINCIPAL
+# -------------------------------
 
 def buscar_tjsp(nome):
 
@@ -41,6 +49,10 @@ def buscar_tjsp(nome):
         url = "https://esaj.tjsp.jus.br/cpopg/search.do"
 
         params = {
+            "conversationId": "",
+            "dadosConsulta.localPesquisa.cdLocal": "-1",
+            "cbPesquisa": "NMPARTE",
+            "dadosConsulta.tipoNuProcesso": "UNIFICADO",
             "dadosConsulta.valorConsulta": nome
         }
 
@@ -57,12 +69,19 @@ def buscar_tjsp(nome):
 
         links = soup.find_all("a", class_="linkProcesso")
 
-        for link_tag in links[:5]:  # ⚠️ LIMITADO (importante)
+        # 🔥 LIMITAR E CONTROLAR PARA NÃO BLOQUEAR
+        for link_tag in links[:3]:
 
-            numero = link_tag.text.strip()
-            link = "https://esaj.tjsp.jus.br" + link_tag.get("href")
+            try:
+                numero = link_tag.text.strip()
+                link = "https://esaj.tjsp.jus.br" + link_tag.get("href")
+            except:
+                continue
 
-            # 🔥 EXTRAÇÃO REAL
+            # ⏱️ DELAY PARA EVITAR BLOQUEIO
+            time.sleep(2)
+
+            # 🔍 EXTRAIR PARTES
             autor, reu = extrair_partes(link)
 
             resultados.append({
