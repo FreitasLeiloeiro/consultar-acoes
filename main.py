@@ -1,88 +1,54 @@
 import streamlit as st
 import pandas as pd
 import unicodedata
-from datetime import datetime, date
+from datetime import datetime
 
-# 🔥 CORREÇÃO DE IMPORT (ESSENCIAL PARA STREAMLIT CLOUD)
-import sys
-import os
-sys.path.append(os.path.abspath(os.path.dirname(__file__)))
-
+# 🔗 IMPORT DO TJSP
 from tribunais.tjsp import buscar_tjsp
 
+# -------------------------------
+# INTERFACE
+# -------------------------------
+
+st.set_page_config(page_title="Consultar Ações", layout="centered")
 
 st.title("Consultar Ações")
 st.write("Busca de processos que possam suspender leilões de imóveis")
 
-
-# INPUTS
 nome = st.text_input("Nome do Devedor (ou avalista / garantidor / fiador / emitente / cônjuge)")
 cpf = st.text_input("CPF ou CNPJ somente números")
 matricula = st.text_input("Matrícula do imóvel")
-
 data_leilao = st.date_input("Data do leilão")
 
-# 📅 FORMATA DATA PARA PADRÃO BRASIL + ALERTA
+# -------------------------------
+# DATA NO PADRÃO BRASIL
+# -------------------------------
+
 if data_leilao:
-    data_br = data_leilao.strftime("%d/%m/%Y")
-    st.info(f"Data do leilão selecionada: {data_br}")
+    data_formatada = data_leilao.strftime("%d/%m/%Y")
+    st.info(f"Data do leilão selecionada: {data_formatada}")
 
-    dias = (data_leilao - date.today()).days
+    dias = (data_leilao - datetime.today().date()).days
 
-    if dias <= 7:
-        st.error(f"⚠ Risco máximo: leilão em {dias} dias")
-    elif dias <= 30:
+    if dias <= 0:
+        st.error("⚠ Risco máximo: leilão em 0 dias")
+    elif dias <= 10:
         st.warning(f"Atenção: leilão em {dias} dias")
-    else:
-        st.success(f"Leilão em {dias} dias")
 
+# -------------------------------
+# NORMALIZAÇÃO DE NOME
+# -------------------------------
 
-# PALAVRAS DE RISCO
-palavras_risco = [
-    "revisional",
-    "revisão contratual",
-    "taxas abusivas",
-    "juros abusivos",
-    "embargos",
-    "anulatória",
-    "nulidade",
-    "alienação fiduciária",
-    "sustação de leilão",
-    "falta de notificação",
-    "ausência de notificação",
-    "liminar",
-    "tutela antecipada",
-    "ação anulatória de consolidação de propriedade",
-    "ação de anulação de leilão extrajudicial",
-    "ação declaratória de nulidade de ato jurídico",
-    "ausência de intimação pessoal",
-    "vício na consolidação da propriedade",
-    "preço vil",
-    "teoria do adimplemento substancial",
-    "irregularidade no edital",
-    "tutela de urgência antecipada",
-    "perigo da demora",
-    "probabilidade do direito",
-    "direito de preferência",
-    "purgação da mora",
-    "consignação em pagamento",
-    "vício de edital",
-    "agravo de instrumento com pedido de efeito suspensivo",
-    "averbação premonitória",
-    "teoria do desvio produtivo do consumidor",
-]
-
-
-# NORMALIZAÇÃO
 def normalizar_nome(nome):
     nome = nome.lower()
     nome = unicodedata.normalize('NFKD', nome)
     nome = "".join([c for c in nome if not unicodedata.combining(c)])
+
     remover = [" de ", " da ", " dos ", " das "]
     for r in remover:
         nome = nome.replace(r, " ")
-    return nome.strip()
 
+    return nome.strip()
 
 def gerar_variacoes(nome):
     nome = normalizar_nome(nome)
@@ -99,19 +65,24 @@ def gerar_variacoes(nome):
 
     return list(set(variacoes))
 
-
+# -------------------------------
 # CLASSIFICAÇÃO DE RISCO
+# -------------------------------
+
 def classificar_risco(classe):
-    classe_lower = classe.lower()
+    classe = classe.lower()
 
-    for palavra in palavras_risco:
-        if palavra in classe_lower:
-            return "⚠ ALTO"
+    if "revisional" in classe or "anulat" in classe:
+        return "🔴 ALTO"
+    elif "embargos" in classe:
+        return "🟠 MÉDIO"
+    else:
+        return "🟢 BAIXO"
 
-    return "🟢 BAIXO"
+# -------------------------------
+# BUSCA
+# -------------------------------
 
-
-# BOTÃO DE BUSCA
 if st.button("Pesquisar processos"):
 
     if not nome:
@@ -125,38 +96,35 @@ if st.button("Pesquisar processos"):
 
         resultados = []
 
-        for nome_busca in variacoes:
+        # 🔥 LOOP NAS VARIAÇÕES
+        for v in variacoes:
             try:
-                dados = buscar_tjsp(nome_busca)
-                resultados.extend(dados)
+                resultados += buscar_tjsp(v)
             except Exception as e:
-                st.error(f"Erro ao consultar TJSP: {e}")
+                st.warning(f"Erro ao consultar TJSP: {e}")
+
+        # -------------------------------
+        # RESULTADOS
+        # -------------------------------
 
         if resultados:
 
-            for item in resultados:
-
-                # FORMATA DATA
-                try:
-                    data_obj = datetime.strptime(item["Data"], "%d/%m/%Y")
-                    item["Data"] = data_obj.strftime("%d/%m/%Y")
-                except:
-                    pass
-
-                # CLASSIFICA RISCO
-                item["Risco"] = classificar_risco(item["Classe"])
-
             df = pd.DataFrame(resultados)
 
-            # transforma em link clicável
-            df["Processo"] = df.apply(
-                lambda x: f'<a href="{x["Link"]}" target="_blank">{x["Processo"]}</a>',
-                axis=1
-            )
-            
-            # remove coluna Link (opcional)
-            df = df.drop(columns=["Link"])
-            
+            # 🚀 REMOVER DUPLICADOS
+            df = df.drop_duplicates(subset=["Processo", "Tribunal"])
+
+            # 🎯 CLASSIFICAR RISCO
+            df["Risco"] = df["Classe"].apply(classificar_risco)
+
+            # 🔗 LINK CLICÁVEL
+            if "Link" in df.columns:
+                df["Processo"] = df.apply(
+                    lambda x: f'<a href="{x["Link"]}" target="_blank">{x["Processo"]}</a>',
+                    axis=1
+                )
+                df = df.drop(columns=["Link"])
+
             st.subheader("Resultados encontrados")
             st.write(df.to_html(escape=False, index=False), unsafe_allow_html=True)
 
