@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import unicodedata
-from datetime import datetime
+from datetime import datetime, date
 
 # 🔥 CORREÇÃO DE IMPORT (ESSENCIAL PARA STREAMLIT CLOUD)
 import sys
@@ -12,7 +12,6 @@ from tribunais.tjsp import buscar_tjsp
 
 
 st.title("Consultar Ações")
-
 st.write("Busca de processos que possam suspender leilões de imóveis")
 
 
@@ -20,7 +19,22 @@ st.write("Busca de processos que possam suspender leilões de imóveis")
 nome = st.text_input("Nome do Devedor (ou avalista / garantidor / fiador / emitente / cônjuge)")
 cpf = st.text_input("CPF ou CNPJ somente números")
 matricula = st.text_input("Matrícula do imóvel")
+
 data_leilao = st.date_input("Data do leilão")
+
+# 📅 FORMATA DATA PARA PADRÃO BRASIL + ALERTA
+if data_leilao:
+    data_br = data_leilao.strftime("%d/%m/%Y")
+    st.info(f"Data do leilão selecionada: {data_br}")
+
+    dias = (data_leilao - date.today()).days
+
+    if dias <= 7:
+        st.error(f"⚠ Risco máximo: leilão em {dias} dias")
+    elif dias <= 30:
+        st.warning(f"Atenção: leilão em {dias} dias")
+    else:
+        st.success(f"Leilão em {dias} dias")
 
 
 # PALAVRAS DE RISCO
@@ -97,7 +111,7 @@ def classificar_risco(classe):
     return "🟢 BAIXO"
 
 
-# BOTÃO
+# BOTÃO DE BUSCA
 if st.button("Pesquisar processos"):
 
     if not nome:
@@ -120,14 +134,16 @@ if st.button("Pesquisar processos"):
 
         if resultados:
 
-            # FORMATA DATA + CLASSIFICA RISCO
             for item in resultados:
+
+                # FORMATA DATA
                 try:
                     data_obj = datetime.strptime(item["Data"], "%d/%m/%Y")
                     item["Data"] = data_obj.strftime("%d/%m/%Y")
                 except:
                     pass
 
+                # CLASSIFICA RISCO
                 item["Risco"] = classificar_risco(item["Classe"])
 
             df = pd.DataFrame(resultados)
