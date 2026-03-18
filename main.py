@@ -1,132 +1,66 @@
-import streamlit as st
-import pandas as pd
-import unicodedata
-from datetime import datetime
+import requests
+from bs4 import BeautifulSoup
 
-# 🔗 IMPORT DO TJSP
-from tribunais.tjsp import buscar_tjsp
+def buscar_tjsp(nome):
 
-# -------------------------------
-# INTERFACE
-# -------------------------------
+    url = "https://esaj.tjsp.jus.br/cpopg/search.do"
 
-st.set_page_config(page_title="Consultar Ações", layout="centered")
+    params = {
+        "conversationId": "",
+        "dadosConsulta.localPesquisa.cdLocal": "-1",
+        "cbPesquisa": "NMPARTE",
+        "dadosConsulta.tipoNuProcesso": "UNIFICADO",
+        "dadosConsulta.valorConsulta": nome
+    }
 
-st.title("Consultar Ações")
-st.write("Busca de processos que possam suspender leilões de imóveis")
+    headers = {
+        "User-Agent": "Mozilla/5.0"
+    }
 
-nome = st.text_input("Nome do Devedor (ou avalista / garantidor / fiador / emitente / cônjuge)")
-cpf = st.text_input("CPF ou CNPJ somente números")
-matricula = st.text_input("Matrícula do imóvel")
-data_leilao = st.date_input("Data do leilão")
+    response = requests.get(url, params=params, headers=headers)
 
-# -------------------------------
-# DATA NO PADRÃO BRASIL
-# -------------------------------
+    resultados = []
 
-if data_leilao:
-    data_formatada = data_leilao.strftime("%d/%m/%Y")
-    st.info(f"Data do leilão selecionada: {data_formatada}")
+    if response.status_code == 200:
 
-    dias = (data_leilao - datetime.today().date()).days
+        soup = BeautifulSoup(response.text, "html.parser")
 
-    if dias <= 0:
-        st.error("⚠ Risco máximo: leilão em 0 dias")
-    elif dias <= 10:
-        st.warning(f"Atenção: leilão em {dias} dias")
+        blocos = soup.find_all("div", class_="fundocinza1")
 
-# -------------------------------
-# NORMALIZAÇÃO DE NOME
-# -------------------------------
+        for bloco in blocos[:10]:
 
-def normalizar_nome(nome):
-    nome = nome.lower()
-    nome = unicodedata.normalize('NFKD', nome)
-    nome = "".join([c for c in nome if not unicodedata.combining(c)])
+            link_tag = bloco.find("a", class_="linkProcesso")
 
-    remover = [" de ", " da ", " dos ", " das "]
-    for r in remover:
-        nome = nome.replace(r, " ")
+            if link_tag:
+                numero = link_tag.text.strip()
+                link = "https://esaj.tjsp.jus.br" + link_tag.get("href")
 
-    return nome.strip()
+                texto = bloco.get_text(separator=" ").lower()
 
-def gerar_variacoes(nome):
-    nome = normalizar_nome(nome)
-    partes = nome.split()
-    variacoes = []
+                # 🔥 EXTRAÇÃO DE PARTES
+                autor = ""
+                reu = ""
 
-    variacoes.append(nome)
+                if "requerente:" in texto:
+                    try:
+                        autor = texto.split("requerente:")[1].split("requerido:")[0].strip()
+                    except:
+                        pass
 
-    if len(partes) > 1:
-        variacoes.append(partes[0] + " " + partes[-1])
+                if "requerido:" in texto:
+                    try:
+                        reu = texto.split("requerido:")[1].split("\n")[0].strip()
+                    except:
+                        pass
 
-    if len(partes) > 2:
-        variacoes.append(partes[-1] + " " + partes[0])
+                resultados.append({
+                    "Tribunal": "TJSP",
+                    "Processo": numero,
+                    "Classe": texto,
+                    "Autor": autor,
+                    "Réu": reu,
+                    "Data": "-",
+                    "Link": link
+                })
 
-    return list(set(variacoes))
-
-# -------------------------------
-# CLASSIFICAÇÃO DE RISCO
-# -------------------------------
-
-def classificar_risco(classe):
-    classe = classe.lower()
-
-    if "revisional" in classe or "anulat" in classe:
-        return "🔴 ALTO"
-    elif "embargos" in classe:
-        return "🟠 MÉDIO"
-    else:
-        return "🟢 BAIXO"
-
-# -------------------------------
-# BUSCA
-# -------------------------------
-
-if st.button("Pesquisar processos"):
-
-    if not nome:
-        st.warning("Digite um nome para buscar")
-
-    else:
-        variacoes = gerar_variacoes(nome)
-
-        st.write("Variações do nome utilizadas na busca:")
-        st.write(variacoes)
-
-        resultados = []
-
-        # 🔥 LOOP NAS VARIAÇÕES
-        for v in variacoes:
-            try:
-                resultados += buscar_tjsp(v)
-            except Exception as e:
-                st.warning(f"Erro ao consultar TJSP: {e}")
-
-        # -------------------------------
-        # RESULTADOS
-        # -------------------------------
-
-        if resultados:
-
-            df = pd.DataFrame(resultados)
-
-            # 🚀 REMOVER DUPLICADOS
-            df = df.drop_duplicates(subset=["Processo", "Tribunal"])
-
-            # 🎯 CLASSIFICAR RISCO
-            df["Risco"] = df["Classe"].apply(classificar_risco)
-
-            # 🔗 LINK CLICÁVEL
-            if "Link" in df.columns:
-                df["Processo"] = df.apply(
-                    lambda x: f'<a href="{x["Link"]}" target="_blank">{x["Processo"]}</a>',
-                    axis=1
-                )
-                df = df.drop(columns=["Link"])
-
-            st.subheader("Resultados encontrados")
-            st.write(df.to_html(escape=False, index=False), unsafe_allow_html=True)
-
-        else:
-            st.warning("Nenhum processo encontrado")
+    return resultados
