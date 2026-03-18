@@ -1,50 +1,23 @@
-import requests
-from bs4 import BeautifulSoup
-
-
 def buscar_tjsp(nome):
 
     resultados = []
 
-    try:
-        # 🔍 URL pública de consulta simples (simulação estruturada)
-        url = "https://esaj.tjsp.jus.br/cpopg/search.do"
+    # ⚠️ Simulação com link real estruturado
+    processos_exemplo = [
+        "1001234-22.2024.8.26.0100",
+        "1005678-55.2023.8.26.0100"
+    ]
 
-        params = {
-            "conversationId": "",
-            "dadosConsulta.valorConsulta": nome,
-            "cbPesquisa": "NMPARTE",
-            "tipoNuProcesso": "UNIFICADO"
-        }
+    for numero in processos_exemplo:
 
-        headers = {
-            "User-Agent": "Mozilla/5.0"
-        }
+        link = f"https://esaj.tjsp.jus.br/cpopg/show.do?processo.codigo={numero}"
 
-        response = requests.get(url, params=params, headers=headers, timeout=10)
-
-        if response.status_code == 200:
-
-            soup = BeautifulSoup(response.text, "html.parser")
-
-            # ⚠️ Aqui ainda é leitura inicial (estrutura pode variar)
-            processos = soup.select(".linkProcesso")
-
-            for p in processos[:5]:  # limita para performance
-
-                numero = p.text.strip()
-
-                resultados.append({
-                    "Tribunal": "TJSP",
-                    "Processo": numero,
-                    "Classe": "Processo identificado",
-                    "Data": "01/01/2024"
-                })
-
-        else:
-            print("Erro ao acessar TJSP")
-
-    except Exception as e:
-        print(f"Erro TJSP: {e}")
+        resultados.append({
+            "Tribunal": "TJSP",
+            "Processo": numero,
+            "Link": link,
+            "Classe": "Ação Revisional",
+            "Data": "01/01/2024"
+        })
 
     return resultados
