@@ -148,8 +148,17 @@ if st.button("Pesquisar processos"):
 
             df = pd.DataFrame(resultados)
 
+            # transforma em link clicável
+            df["Processo"] = df.apply(
+                lambda x: f'<a href="{x["Link"]}" target="_blank">{x["Processo"]}</a>',
+                axis=1
+            )
+            
+            # remove coluna Link (opcional)
+            df = df.drop(columns=["Link"])
+            
             st.subheader("Resultados encontrados")
-            st.dataframe(df)
+            st.write(df.to_html(escape=False, index=False), unsafe_allow_html=True)
 
         else:
             st.warning("Nenhum processo encontrado")
