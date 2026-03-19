@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import unicodedata
 from datetime import datetime
+import time
 
 from tribunais.tjsp import buscar_tjsp
 
@@ -18,8 +19,8 @@ st.write("Busca de processos que possam suspender leilões de imóveis")
 # INPUTS
 # -------------------------------
 
-nome = st.text_input("Nome do Devedor (ou avalista / garantidor / fiador / emitente / cônjuge)")
-cpf = st.text_input("CPF ou CNPJ somente números")
+nome = st.text_input("Nome (obrigatório para busca)")
+cpf = st.text_input("CPF ou CNPJ (opcional)")
 matricula = st.text_input("Matrícula do imóvel")
 data_leilao = st.date_input("Data do leilão")
 
@@ -59,12 +60,10 @@ def normalizar_nome(nome):
     nome = "".join([c for c in nome if not unicodedata.combining(c)])
     return nome.strip()
 
-def nome_inteligente(nome):
+def nome_simples(nome):
     partes = nome.split()
-
     if len(partes) >= 2:
         return partes[0] + " " + partes[-1]
-
     return nome
 
 def identificar_banco(texto):
@@ -88,17 +87,26 @@ def classificar_risco(row):
 if st.button("Pesquisar processos"):
 
     if not nome:
-        st.warning("Digite um nome")
+        st.warning("Digite o nome (obrigatório)")
     else:
 
         nome_normalizado = normalizar_nome(nome)
-        nome_busca = nome_inteligente(nome_normalizado)
+        nome_reduzido = nome_simples(nome_normalizado)
 
-        st.write("Busca otimizada:")
-        st.write(nome_busca)
+        st.write("Tentativa 1 (nome completo):")
+        st.write(nome_normalizado)
 
-        # 🔥 UMA ÚNICA CONSULTA (SEM BLOQUEIO)
-        resultados = buscar_tjsp(nome_busca)
+        resultados = buscar_tjsp(nome_normalizado)
+
+        # 🔥 FALLBACK AUTOMÁTICO
+        if not resultados:
+            st.write("Tentativa 2 (nome simplificado):")
+            st.write(nome_reduzido)
+
+            time.sleep(2)
+            resultados = buscar_tjsp(nome_reduzido)
+
+        # -------------------------------
 
         if resultados:
 
