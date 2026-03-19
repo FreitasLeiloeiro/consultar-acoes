@@ -3,11 +3,11 @@ import streamlit as st
 st.set_page_config(page_title="Consultar Ações", layout="centered")
 
 st.title("Consultar Ações")
-st.write("Busca de processos que possam impactar leilões de imóveis")
+st.write("Busca de processos que possam suspender ou cancelar leilões de imóveis")
 
 # INPUTS
 nome = st.text_input("Nome da parte (obrigatório)")
-cpf = st.text_input("CPF ou CNPJ (opcional)")
+cpf = st.text_input("CPF ou CNPJ (opcional) somente números")
 
 # BOTÃO
 if st.button("Pesquisar processos"):
