@@ -7,7 +7,7 @@ from datetime import datetime
 from tribunais.tjsp import buscar_tjsp
 
 # -------------------------------
-# CONFIGURAÇÃO
+# INTERFACE
 # -------------------------------
 
 st.set_page_config(page_title="Consultar Ações", layout="centered")
@@ -15,17 +15,13 @@ st.set_page_config(page_title="Consultar Ações", layout="centered")
 st.title("Consultar Ações")
 st.write("Busca de processos que possam suspender leilões de imóveis")
 
-# -------------------------------
-# INPUTS
-# -------------------------------
-
 nome = st.text_input("Nome do Devedor (ou avalista / garantidor / fiador / emitente / cônjuge)")
 cpf = st.text_input("CPF ou CNPJ somente números")
 matricula = st.text_input("Matrícula do imóvel")
 data_leilao = st.date_input("Data do leilão")
 
 # -------------------------------
-# DATA BRASIL + ALERTA
+# DATA NO PADRÃO BRASIL
 # -------------------------------
 
 if data_leilao:
@@ -40,7 +36,7 @@ if data_leilao:
         st.warning(f"Atenção: leilão em {dias} dias")
 
 # -------------------------------
-# NORMALIZAÇÃO
+# NORMALIZAÇÃO DE NOME
 # -------------------------------
 
 def normalizar_nome(nome):
@@ -57,8 +53,9 @@ def normalizar_nome(nome):
 def gerar_variacoes(nome):
     nome = normalizar_nome(nome)
     partes = nome.split()
+    variacoes = []
 
-    variacoes = [nome]
+    variacoes.append(nome)
 
     if len(partes) > 1:
         variacoes.append(partes[0] + " " + partes[-1])
@@ -72,30 +69,13 @@ def gerar_variacoes(nome):
 # CLASSIFICAÇÃO DE RISCO
 # -------------------------------
 
-def classificar_risco(texto):
+def classificar_risco(classe):
+    classe = classe.lower()
 
-    texto = texto.lower()
-
-    alto = [
-        "revisional",
-        "anulat",
-        "nulidade",
-        "sustação",
-        "liminar",
-        "tutela"
-    ]
-
-    medio = [
-        "embargos",
-        "execução"
-    ]
-
-    if any(p in texto for p in alto):
+    if "revisional" in classe or "anulat" in classe:
         return "🔴 ALTO"
-
-    elif any(p in texto for p in medio):
+    elif "embargos" in classe:
         return "🟠 MÉDIO"
-
     else:
         return "🟢 BAIXO"
 
@@ -116,7 +96,7 @@ if st.button("Pesquisar processos"):
 
         resultados = []
 
-        # 🔥 BUSCA EM TODAS VARIAÇÕES
+        # 🔥 LOOP NAS VARIAÇÕES
         for v in variacoes:
             try:
                 resultados += buscar_tjsp(v)
@@ -146,11 +126,7 @@ if st.button("Pesquisar processos"):
                 df = df.drop(columns=["Link"])
 
             st.subheader("Resultados encontrados")
-
-            st.write(
-                df.to_html(escape=False, index=False),
-                unsafe_allow_html=True
-            )
+            st.write(df.to_html(escape=False, index=False), unsafe_allow_html=True)
 
         else:
             st.warning("Nenhum processo encontrado")
