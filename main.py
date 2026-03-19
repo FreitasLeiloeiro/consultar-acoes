@@ -1,32 +1,21 @@
 import streamlit as st
 
-st.set_page_config(page_title="Consultar Ações", layout="centered")
+st.title("Consulta Inteligente de Processos")
 
-st.title("Consultar Ações")
-st.write("Busca de processos que possam suspender ou cancelar leilões de imóveis")
+nome = st.text_input("Nome da parte")
 
-# INPUTS
-nome = st.text_input("Nome da parte (obrigatório)")
-cpf = st.text_input("CPF ou CNPJ (opcional) somente números")
+if st.button("Buscar"):
 
-# BOTÃO
-if st.button("Pesquisar processos"):
-
-    if not nome:
-        st.warning("Digite o nome para realizar a busca")
-    else:
+    if nome:
         nome_formatado = nome.replace(" ", "+")
 
-        # Se tiver CPF, inclui na URL
-        if cpf:
-            url = f"https://esaj.tjsp.jus.br/cpopg/search.do?cbPesquisa=NMPARTE&dadosConsulta.valorConsulta={nome_formatado}&dadosConsulta.valorConsultaCpfCnpj={cpf}"
-        else:
-            url = f"https://esaj.tjsp.jus.br/cpopg/search.do?cbPesquisa=NMPARTE&dadosConsulta.valorConsulta={nome_formatado}"
+        st.markdown("### 🔎 Buscar em plataformas:")
 
-        st.success("Consulta pronta")
+        st.markdown(f"👉 [Escavador](https://www.escavador.com/busca?termo={nome_formatado})")
+        st.markdown(f"👉 [Jusbrasil](https://www.jusbrasil.com.br/busca?q={nome_formatado})")
 
-        st.markdown(f"""
-        🔎 **Clique abaixo para consultar no TJSP:**
+        st.markdown("---")
+        st.markdown("### ⚖️ Tribunais:")
 
-        👉 [Abrir processos no TJSP]({url})
-        """)
+        st.markdown(f"👉 [TJSP](https://esaj.tjsp.jus.br/cpopg/search.do?dadosConsulta.valorConsulta={nome_formatado})")
+        st.markdown(f"👉 [TJRJ](https://www4.tjrj.jus.br/consultaProcessoWebV2/consulta.do?nomeParte={nome_formatado})")
