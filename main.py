@@ -1,21 +1,28 @@
 import streamlit as st
 
+st.set_page_config(page_title="Consulta Inteligente de Processos", layout="centered")
+
 st.title("Consulta Inteligente de Processos")
+st.write("Busca automatizada por devedor + banco")
 
-nome = st.text_input("Nome da parte")
+nome = st.text_input("Nome do devedor")
+banco = st.text_input("Banco (ex: Bradesco, Itaú, Santander)")
 
-if st.button("Buscar"):
+if st.button("Buscar processos"):
 
-    if nome:
-        nome_formatado = nome.replace(" ", "+")
+    if not nome:
+        st.warning("Digite o nome")
+    else:
+        termo = f"{nome} {banco}".strip()
+        termo_formatado = termo.replace(" ", "+")
 
-        st.markdown("### 🔎 Buscar em plataformas:")
+        st.success("Buscas prontas:")
 
-        st.markdown(f"👉 [Escavador](https://www.escavador.com/busca?termo={nome_formatado})")
-        st.markdown(f"👉 [Jusbrasil](https://www.jusbrasil.com.br/busca?q={nome_formatado})")
+        st.markdown("### 🔎 Google (mais completo)")
+        st.markdown(f"👉 [Buscar no Google](https://www.google.com/search?q={termo_formatado}+processo)")
 
-        st.markdown("---")
-        st.markdown("### ⚖️ Tribunais:")
+        st.markdown("### ⚖️ Jusbrasil")
+        st.markdown(f"👉 [Buscar no Jusbrasil](https://www.jusbrasil.com.br/busca?q={termo_formatado})")
 
-        st.markdown(f"👉 [TJSP](https://esaj.tjsp.jus.br/cpopg/search.do?dadosConsulta.valorConsulta={nome_formatado})")
-        st.markdown(f"👉 [TJRJ](https://www4.tjrj.jus.br/consultaProcessoWebV2/consulta.do?nomeParte={nome_formatado})")
+        st.markdown("### 🧾 Escavador")
+        st.markdown(f"👉 [Buscar no Escavador](https://www.escavador.com/busca?termo={termo_formatado})")
