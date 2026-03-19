@@ -3,11 +3,11 @@ import pandas as pd
 import unicodedata
 from datetime import datetime
 
-# 🔗 IMPORT DO TJSP
+# 🔗 IMPORTAÇÃO DO TJSP
 from tribunais.tjsp import buscar_tjsp
 
 # -------------------------------
-# CONFIGURAÇÃO
+# CONFIG INICIAL
 # -------------------------------
 
 st.set_page_config(page_title="Consultar Ações", layout="centered")
@@ -25,7 +25,7 @@ matricula = st.text_input("Matrícula do imóvel")
 data_leilao = st.date_input("Data do leilão")
 
 # -------------------------------
-# DATA BRASIL + ALERTA
+# DATA NO PADRÃO BR
 # -------------------------------
 
 if data_leilao:
@@ -35,12 +35,36 @@ if data_leilao:
     dias = (data_leilao - datetime.today().date()).days
 
     if dias <= 0:
-        st.error("⚠ Risco máximo: leilão em 0 dias")
+        st.error("⚠️ Risco máximo: leilão em 0 dias")
     elif dias <= 10:
         st.warning(f"Atenção: leilão em {dias} dias")
+    else:
+        st.success(f"Leilão em {dias} dias")
 
 # -------------------------------
-# NORMALIZAÇÃO
+# LISTA DE BANCOS
+# -------------------------------
+
+bancos = [
+    "bradesco",
+    "itau",
+    "santander",
+    "caixa economica",
+    "caixa econômica",
+    "banco do brasil",
+    "bb",
+    "hsbc",
+    "inter",
+    "nubank",
+    "pan",
+    "votorantim",
+    "original",
+    "daycoval",
+    "mercantil",
+]
+
+# -------------------------------
+# FUNÇÕES AUXILIARES
 # -------------------------------
 
 def normalizar_nome(nome):
@@ -54,11 +78,13 @@ def normalizar_nome(nome):
 
     return nome.strip()
 
+
 def gerar_variacoes(nome):
     nome = normalizar_nome(nome)
     partes = nome.split()
 
-    variacoes = [nome]
+    variacoes = []
+    variacoes.append(nome)
 
     if len(partes) > 1:
         variacoes.append(partes[0] + " " + partes[-1])
@@ -68,47 +94,35 @@ def gerar_variacoes(nome):
 
     return list(set(variacoes))
 
-# -------------------------------
-# CLASSIFICAÇÃO DE RISCO
-# -------------------------------
 
-def classificar_risco(texto):
+def identificar_banco(texto):
+    if not texto:
+        return ""
 
     texto = texto.lower()
 
-    alto = [
-        "revisional",
-        "anulat",
-        "nulidade",
-        "sustação",
-        "liminar",
-        "tutela"
-    ]
+    for banco in bancos:
+        if banco in texto:
+            return banco.upper()
 
-    medio = [
-        "embargos",
-        "execução"
-    ]
+    return ""
 
-    if any(p in texto for p in alto):
+
+def classificar_risco(row):
+    if row["Banco"]:
         return "🔴 ALTO"
-
-    elif any(p in texto for p in medio):
-        return "🟠 MÉDIO"
-
-    else:
-        return "🟢 BAIXO"
+    return "🟢 BAIXO"
 
 # -------------------------------
-# BUSCA
+# BOTÃO DE BUSCA
 # -------------------------------
 
 if st.button("Pesquisar processos"):
 
     if not nome:
-        st.warning("Digite um nome para buscar")
-
+        st.warning("Digite um nome para busca")
     else:
+
         variacoes = gerar_variacoes(nome)
 
         st.write("Variações do nome utilizadas na busca:")
@@ -116,52 +130,42 @@ if st.button("Pesquisar processos"):
 
         resultados = []
 
-        # 🔍 BUSCA EM TODAS VARIAÇÕES
+        # 🔎 CONSULTA TJSP
         for v in variacoes:
-            try:
-                resultados += buscar_tjsp(v)
-            except Exception as e:
-                st.warning(f"Erro ao consultar TJSP: {e}")
-
-        # -------------------------------
-        # RESULTADOS
-        # -------------------------------
+            dados_tjsp = buscar_tjsp(v)
+            resultados.extend(dados_tjsp)
 
         if resultados:
 
             df = pd.DataFrame(resultados)
 
-            # 🔧 GARANTIR COLUNAS
-            if "Autor" not in df.columns:
-                df["Autor"] = ""
+            # 🔥 REMOVER DUPLICADOS
+            df = df.drop_duplicates(subset=["Processo"])
 
-            if "Réu" not in df.columns:
-                df["Réu"] = ""
+            # 🏦 DETECTAR BANCO
+            df["Banco"] = df.apply(
+                lambda row: identificar_banco(
+                    str(row.get("Autor", "")) + " " + str(row.get("Réu", ""))
+                ),
+                axis=1
+            )
 
-            # 🚀 REMOVER DUPLICADOS
-            df = df.drop_duplicates(subset=["Processo", "Tribunal"])
-
-            # 🎯 CLASSIFICAR RISCO
-            df["Risco"] = df["Classe"].apply(classificar_risco)
-
-            # 🔗 LINK CLICÁVEL
-            if "Link" in df.columns:
-                df["Processo"] = df.apply(
-                    lambda x: f'<a href="{x["Link"]}" target="_blank">{x["Processo"]}</a>',
-                    axis=1
-                )
-                df = df.drop(columns=["Link"])
-
-            # 📊 ORDEM DAS COLUNAS
-            colunas = ["Tribunal", "Processo", "Autor", "Réu", "Classe", "Data", "Risco"]
-            df = df[[c for c in colunas if c in df.columns]]
+            # ⚠️ CLASSIFICAR RISCO
+            df["Risco"] = df.apply(classificar_risco, axis=1)
 
             st.subheader("Resultados encontrados")
 
-            st.write(
-                df.to_html(escape=False, index=False),
-                unsafe_allow_html=True
-            )
+            # 🔗 EXIBIÇÃO COM LINK
+            for _, row in df.iterrows():
+
+                st.markdown(f"""
+                **Tribunal:** {row['Tribunal']}  
+                **Processo:** [{row['Processo']}]({row['Link']})  
+                **Classe:** {row['Classe']}  
+                **Banco:** {row['Banco'] if row['Banco'] else 'Não identificado'}  
+                **Risco:** {row['Risco']}  
+                ---
+                """)
 
         else:
             st.warning("Nenhum processo encontrado")
