@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import unicodedata
 from datetime import datetime
-import time
 
 from tribunais.tjsp import buscar_tjsp
 
@@ -19,7 +18,7 @@ st.write("Busca de processos que possam suspender leilões de imóveis")
 # INPUTS
 # -------------------------------
 
-nome = st.text_input("Nome (obrigatório para busca)")
+nome = st.text_input("Nome do Devedor (obrigatório)")
 cpf = st.text_input("CPF ou CNPJ (opcional)")
 matricula = st.text_input("Matrícula do imóvel")
 data_leilao = st.date_input("Data do leilão")
@@ -42,96 +41,35 @@ if data_leilao:
         st.success(f"Leilão em {dias} dias")
 
 # -------------------------------
-# BANCOS
-# -------------------------------
-
-bancos = [
-    "bradesco","itau","santander","caixa","banco do brasil",
-    "bb","inter","nubank","pan","votorantim"
-]
-
-# -------------------------------
-# FUNÇÕES
-# -------------------------------
-
-def normalizar_nome(nome):
-    nome = nome.lower()
-    nome = unicodedata.normalize('NFKD', nome)
-    nome = "".join([c for c in nome if not unicodedata.combining(c)])
-    return nome.strip()
-
-def nome_simples(nome):
-    partes = nome.split()
-    if len(partes) >= 2:
-        return partes[0] + " " + partes[-1]
-    return nome
-
-def identificar_banco(texto):
-    if not texto:
-        return ""
-    texto = texto.lower()
-    for banco in bancos:
-        if banco in texto:
-            return banco.upper()
-    return ""
-
-def classificar_risco(row):
-    if row["Banco"]:
-        return "🔴 ALTO"
-    return "🟢 BAIXO"
-
-# -------------------------------
 # BOTÃO
 # -------------------------------
 
 if st.button("Pesquisar processos"):
 
     if not nome:
-        st.warning("Digite o nome (obrigatório)")
+        st.warning("Digite o nome para busca")
     else:
 
-        nome_normalizado = normalizar_nome(nome)
-        nome_reduzido = nome_simples(nome_normalizado)
-
-        st.write("Tentativa 1 (nome completo):")
-        st.write(nome_normalizado)
-
-        resultados = buscar_tjsp(nome_normalizado)
-
-        # 🔥 FALLBACK AUTOMÁTICO
-        if not resultados:
-            st.write("Tentativa 2 (nome simplificado):")
-            st.write(nome_reduzido)
-
-            time.sleep(2)
-            resultados = buscar_tjsp(nome_reduzido)
-
-        # -------------------------------
+        # 🔥 BUSCA SIMPLES (FUNCIONA)
+        resultados = buscar_tjsp(nome)
 
         if resultados:
 
             df = pd.DataFrame(resultados)
 
+            # remover duplicados
             df = df.drop_duplicates(subset=["Processo"])
-
-            df["Banco"] = df.apply(
-                lambda row: identificar_banco(
-                    str(row.get("Autor", "")) + " " + str(row.get("Réu", ""))
-                ),
-                axis=1
-            )
-
-            df["Risco"] = df.apply(classificar_risco, axis=1)
 
             st.subheader("Resultados encontrados")
 
+            # 🔗 EXIBIÇÃO SIMPLES E FUNCIONAL
             for _, row in df.iterrows():
+
                 st.markdown(f"""
-                **Tribunal:** {row['Tribunal']}  
-                **Processo:** [{row['Processo']}]({row['Link']})  
-                **Classe:** {row['Classe']}  
-                **Banco:** {row['Banco'] if row['Banco'] else 'Não identificado'}  
-                **Risco:** {row['Risco']}  
+                **Tribunal:** {row.get('Tribunal', '')}  
+                **Processo:** [{row.get('Processo', '')}]({row.get('Link', '')})  
+                **Classe:** {row.get('Classe', '')}  
+                **Data:** {row.get('Data', '')}  
                 ---
                 """)
 
