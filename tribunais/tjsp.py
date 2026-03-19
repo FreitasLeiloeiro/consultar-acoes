@@ -20,19 +20,16 @@ def buscar_tjsp(nome):
             "User-Agent": "Mozilla/5.0"
         }
 
-        response = requests.get(url, params=params, headers=headers, timeout=10)
-
-        if response.status_code != 200:
-            return []
+        response = requests.get(url, params=params, headers=headers)
 
         soup = BeautifulSoup(response.text, "html.parser")
 
         processos = soup.find_all("a", class_="linkProcesso")
 
-        for p in processos:
+        for processo in processos:
 
-            numero = p.text.strip()
-            link = "https://esaj.tjsp.jus.br" + p.get("href")
+            numero = processo.text.strip()
+            link = "https://esaj.tjsp.jus.br" + processo.get("href")
 
             resultados.append({
                 "Tribunal": "TJSP",
@@ -44,6 +41,5 @@ def buscar_tjsp(nome):
 
         return resultados
 
-    except Exception as e:
-        print("Erro TJSP:", e)
+    except:
         return []
