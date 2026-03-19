@@ -1,32 +1,18 @@
 import streamlit as st
-import pandas as pd
-import unicodedata
 from datetime import datetime
-
-from tribunais.tjsp import buscar_tjsp
-
-# -------------------------------
-# CONFIG
-# -------------------------------
 
 st.set_page_config(page_title="Consultar Ações", layout="centered")
 
 st.title("Consultar Ações")
 st.write("Busca de processos que possam suspender leilões de imóveis")
 
-# -------------------------------
 # INPUTS
-# -------------------------------
-
 nome = st.text_input("Nome do Devedor (obrigatório)")
 cpf = st.text_input("CPF ou CNPJ (opcional)")
 matricula = st.text_input("Matrícula do imóvel")
 data_leilao = st.date_input("Data do leilão")
 
-# -------------------------------
-# DATA BR
-# -------------------------------
-
+# DATA
 if data_leilao:
     data_formatada = data_leilao.strftime("%d/%m/%Y")
     st.info(f"Data do leilão selecionada: {data_formatada}")
@@ -40,48 +26,21 @@ if data_leilao:
     else:
         st.success(f"Leilão em {dias} dias")
 
-# -------------------------------
-# FUNÇÃO SIMPLES
-# -------------------------------
-
-def normalizar_nome(nome):
-    nome = nome.lower()
-    nome = unicodedata.normalize('NFKD', nome)
-    nome = "".join([c for c in nome if not unicodedata.combining(c)])
-    return nome.strip()
-
-# -------------------------------
 # BOTÃO
-# -------------------------------
-
 if st.button("Pesquisar processos"):
 
     if not nome:
-        st.warning("Digite o nome para busca")
+        st.warning("Digite o nome")
     else:
 
-        nome_busca = normalizar_nome(nome)
+        nome_formatado = nome.replace(" ", "+")
 
-        st.write("Buscando por:")
-        st.write(nome_busca)
+        url = f"https://esaj.tjsp.jus.br/cpopg/search.do?cbPesquisa=NMPARTE&dadosConsulta.valorConsulta={nome_formatado}"
 
-        with st.spinner("Consultando TJSP..."):
+        st.success("Consulta pronta")
 
-            resultados = buscar_tjsp(nome_busca)
+        st.markdown(f"""
+        🔎 **Clique abaixo para ver os processos no TJSP:**
 
-        # 🔥 GARANTE QUE NÃO TRAVA
-        if resultados is None:
-            resultados = []
-
-        if resultados:
-
-            df = pd.DataFrame(resultados)
-
-            df = df.drop_duplicates(subset=["Processo"])
-
-            st.subheader("Resultados encontrados")
-
-            st.dataframe(df)
-
-        else:
-            st.warning("Nenhum processo encontrado ou consulta bloqueada")
+        👉 [Abrir consulta no TJSP]({url})
+        """)
