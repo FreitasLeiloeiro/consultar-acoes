@@ -3,10 +3,11 @@ import pandas as pd
 import unicodedata
 from datetime import datetime
 
+# 🔗 IMPORT DO TJSP
 from tribunais.tjsp import buscar_tjsp
 
 # -------------------------------
-# CONFIG
+# CONFIGURAÇÃO
 # -------------------------------
 
 st.set_page_config(page_title="Consultar Ações", layout="centered")
@@ -18,13 +19,13 @@ st.write("Busca de processos que possam suspender leilões de imóveis")
 # INPUTS
 # -------------------------------
 
-nome = st.text_input("Nome do Devedor (obrigatório)")
-cpf = st.text_input("CPF ou CNPJ (opcional)")
+nome = st.text_input("Nome do Devedor (ou avalista / garantidor / fiador / emitente / cônjuge)")
+cpf = st.text_input("CPF ou CNPJ somente números")
 matricula = st.text_input("Matrícula do imóvel")
 data_leilao = st.date_input("Data do leilão")
 
 # -------------------------------
-# DATA BR
+# DATA BRASIL + ALERTA
 # -------------------------------
 
 if data_leilao:
@@ -34,14 +35,12 @@ if data_leilao:
     dias = (data_leilao - datetime.today().date()).days
 
     if dias <= 0:
-        st.error("⚠️ Risco máximo: leilão em 0 dias")
+        st.error("⚠ Risco máximo: leilão em 0 dias")
     elif dias <= 10:
         st.warning(f"Atenção: leilão em {dias} dias")
-    else:
-        st.success(f"Leilão em {dias} dias")
 
 # -------------------------------
-# FUNÇÕES
+# NORMALIZAÇÃO
 # -------------------------------
 
 def normalizar_nome(nome):
@@ -55,14 +54,11 @@ def normalizar_nome(nome):
 
     return nome.strip()
 
-
 def gerar_variacoes(nome):
     nome = normalizar_nome(nome)
     partes = nome.split()
 
-    variacoes = []
-
-    variacoes.append(nome)
+    variacoes = [nome]
 
     if len(partes) > 1:
         variacoes.append(partes[0] + " " + partes[-1])
@@ -73,15 +69,46 @@ def gerar_variacoes(nome):
     return list(set(variacoes))
 
 # -------------------------------
-# BOTÃO
+# CLASSIFICAÇÃO DE RISCO
+# -------------------------------
+
+def classificar_risco(texto):
+
+    texto = texto.lower()
+
+    alto = [
+        "revisional",
+        "anulat",
+        "nulidade",
+        "sustação",
+        "liminar",
+        "tutela"
+    ]
+
+    medio = [
+        "embargos",
+        "execução"
+    ]
+
+    if any(p in texto for p in alto):
+        return "🔴 ALTO"
+
+    elif any(p in texto for p in medio):
+        return "🟠 MÉDIO"
+
+    else:
+        return "🟢 BAIXO"
+
+# -------------------------------
+# BUSCA
 # -------------------------------
 
 if st.button("Pesquisar processos"):
 
     if not nome:
-        st.warning("Digite o nome para busca")
-    else:
+        st.warning("Digite um nome para buscar")
 
+    else:
         variacoes = gerar_variacoes(nome)
 
         st.write("Variações do nome utilizadas na busca:")
@@ -89,21 +116,41 @@ if st.button("Pesquisar processos"):
 
         resultados = []
 
-        # 🔥 LOOP ORIGINAL QUE FUNCIONAVA
+        # 🔥 BUSCA EM TODAS VARIAÇÕES
         for v in variacoes:
-            dados = buscar_tjsp(v)
-            resultados.extend(dados)
+            try:
+                resultados += buscar_tjsp(v)
+            except Exception as e:
+                st.warning(f"Erro ao consultar TJSP: {e}")
+
+        # -------------------------------
+        # RESULTADOS
+        # -------------------------------
 
         if resultados:
 
             df = pd.DataFrame(resultados)
 
-            # remover duplicados
-            df = df.drop_duplicates(subset=["Processo"])
+            # 🚀 REMOVER DUPLICADOS
+            df = df.drop_duplicates(subset=["Processo", "Tribunal"])
+
+            # 🎯 CLASSIFICAR RISCO
+            df["Risco"] = df["Classe"].apply(classificar_risco)
+
+            # 🔗 LINK CLICÁVEL
+            if "Link" in df.columns:
+                df["Processo"] = df.apply(
+                    lambda x: f'<a href="{x["Link"]}" target="_blank">{x["Processo"]}</a>',
+                    axis=1
+                )
+                df = df.drop(columns=["Link"])
 
             st.subheader("Resultados encontrados")
 
-            st.dataframe(df)
+            st.write(
+                df.to_html(escape=False, index=False),
+                unsafe_allow_html=True
+            )
 
         else:
             st.warning("Nenhum processo encontrado")
