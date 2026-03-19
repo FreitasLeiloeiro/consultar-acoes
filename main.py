@@ -18,45 +18,37 @@ st.write("Busca de processos que possam suspender leilões de imóveis")
 # INPUTS
 # -------------------------------
 
-nome = st.text_input("Nome do Devedor (ou avalista / garantidor / fiador / emitente / cônjuge)")
-cpf = st.text_input("Números do CPF ou CNPJ")
-matricula = st.text_input("Matrícula do local")
-data_leilao = st.date_input("Dados do")
+nome = st.text_input("Nome do Devedor (obrigatório)")
+cpf = st.text_input("CPF ou CNPJ (opcional)")
+matricula = st.text_input("Matrícula do imóvel")
+data_leilao = st.date_input("Data do leilão")
 
 # -------------------------------
-# FUNÇÕES
+# DATA BR
+# -------------------------------
+
+if data_leilao:
+    data_formatada = data_leilao.strftime("%d/%m/%Y")
+    st.info(f"Data do leilão selecionada: {data_formatada}")
+
+    dias = (data_leilao - datetime.today().date()).days
+
+    if dias <= 0:
+        st.error("⚠️ Risco máximo: leilão em 0 dias")
+    elif dias <= 10:
+        st.warning(f"Atenção: leilão em {dias} dias")
+    else:
+        st.success(f"Leilão em {dias} dias")
+
+# -------------------------------
+# FUNÇÃO SIMPLES
 # -------------------------------
 
 def normalizar_nome(nome):
-
     nome = nome.lower()
     nome = unicodedata.normalize('NFKD', nome)
     nome = "".join([c for c in nome if not unicodedata.combining(c)])
-
-    remover = [" de ", " da ", " dos ", " das "]
-    for r in remover:
-        nome = nome.replace(r, " ")
-
     return nome.strip()
-
-
-def gerar_variacoes(nome):
-
-    nome = normalizar_nome(nome)
-
-    partes = nome.split()
-
-    variacoes = []
-
-    variacoes.append(nome)
-
-    if len(partes) > 1:
-        variacoes.append(partes[0] + " " + partes[-1])
-
-    if len(partes) > 2:
-        variacoes.append(partes[-1] + " " + partes[0])
-
-    return list(set(variacoes))
 
 # -------------------------------
 # BOTÃO
@@ -65,20 +57,21 @@ def gerar_variacoes(nome):
 if st.button("Pesquisar processos"):
 
     if not nome:
-        st.warning("Digite um nome para buscar")
+        st.warning("Digite o nome para busca")
     else:
 
-        variacoes = gerar_variacoes(nome)
+        nome_busca = normalizar_nome(nome)
 
-        st.write("Variações do nome utilizado na busca:")
-        st.write(variacoes)
+        st.write("Buscando por:")
+        st.write(nome_busca)
 
-        resultados = []
+        with st.spinner("Consultando TJSP..."):
 
-        # 🔥 ESSA É A LÓGICA ORIGINAL QUE FUNCIONAVA
-        for v in variacoes:
-            processos = buscar_tjsp(v)
-            resultados.extend(processos)
+            resultados = buscar_tjsp(nome_busca)
+
+        # 🔥 GARANTE QUE NÃO TRAVA
+        if resultados is None:
+            resultados = []
 
         if resultados:
 
@@ -91,4 +84,4 @@ if st.button("Pesquisar processos"):
             st.dataframe(df)
 
         else:
-            st.warning("Nenhum processo encontrado")
+            st.warning("Nenhum processo encontrado ou consulta bloqueada")
