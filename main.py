@@ -3,11 +3,10 @@ import pandas as pd
 import unicodedata
 from datetime import datetime
 
-# 🔗 IMPORT DO TJSP
 from tribunais.tjsp import buscar_tjsp
 
 # -------------------------------
-# INTERFACE
+# CONFIG
 # -------------------------------
 
 st.set_page_config(page_title="Consultar Ações", layout="centered")
@@ -15,13 +14,17 @@ st.set_page_config(page_title="Consultar Ações", layout="centered")
 st.title("Consultar Ações")
 st.write("Busca de processos que possam suspender leilões de imóveis")
 
-nome = st.text_input("Nome do Devedor (ou avalista / garantidor / fiador / emitente / cônjuge)")
-cpf = st.text_input("CPF ou CNPJ somente números")
+# -------------------------------
+# INPUTS
+# -------------------------------
+
+nome = st.text_input("Nome do Devedor (obrigatório)")
+cpf = st.text_input("CPF ou CNPJ (opcional)")
 matricula = st.text_input("Matrícula do imóvel")
 data_leilao = st.date_input("Data do leilão")
 
 # -------------------------------
-# DATA NO PADRÃO BRASIL
+# DATA BR
 # -------------------------------
 
 if data_leilao:
@@ -31,12 +34,14 @@ if data_leilao:
     dias = (data_leilao - datetime.today().date()).days
 
     if dias <= 0:
-        st.error("⚠ Risco máximo: leilão em 0 dias")
+        st.error("⚠️ Risco máximo: leilão em 0 dias")
     elif dias <= 10:
         st.warning(f"Atenção: leilão em {dias} dias")
+    else:
+        st.success(f"Leilão em {dias} dias")
 
 # -------------------------------
-# NORMALIZAÇÃO DE NOME
+# FUNÇÕES
 # -------------------------------
 
 def normalizar_nome(nome):
@@ -50,9 +55,11 @@ def normalizar_nome(nome):
 
     return nome.strip()
 
+
 def gerar_variacoes(nome):
     nome = normalizar_nome(nome)
     partes = nome.split()
+
     variacoes = []
 
     variacoes.append(nome)
@@ -66,67 +73,37 @@ def gerar_variacoes(nome):
     return list(set(variacoes))
 
 # -------------------------------
-# CLASSIFICAÇÃO DE RISCO
-# -------------------------------
-
-def classificar_risco(classe):
-    classe = classe.lower()
-
-    if "revisional" in classe or "anulat" in classe:
-        return "🔴 ALTO"
-    elif "embargos" in classe:
-        return "🟠 MÉDIO"
-    else:
-        return "🟢 BAIXO"
-
-# -------------------------------
-# BUSCA
+# BOTÃO
 # -------------------------------
 
 if st.button("Pesquisar processos"):
 
     if not nome:
-        st.warning("Digite um nome para buscar")
-
+        st.warning("Digite o nome para busca")
     else:
+
         variacoes = gerar_variacoes(nome)
 
-        st.write("Variações do nome utilizadas na busca:")
+        st.write("Variações utilizadas:")
         st.write(variacoes)
 
         resultados = []
 
-        # 🔥 LOOP NAS VARIAÇÕES
+        # 🔥 BUSCA (VERSÃO QUE FUNCIONAVA)
         for v in variacoes:
-            try:
-                resultados += buscar_tjsp(v)
-            except Exception as e:
-                st.warning(f"Erro ao consultar TJSP: {e}")
-
-        # -------------------------------
-        # RESULTADOS
-        # -------------------------------
+            dados = buscar_tjsp(v)
+            resultados.extend(dados)
 
         if resultados:
 
             df = pd.DataFrame(resultados)
 
-            # 🚀 REMOVER DUPLICADOS
-            df = df.drop_duplicates(subset=["Processo", "Tribunal"])
-
-            # 🎯 CLASSIFICAR RISCO
-            df["Risco"] = df["Classe"].apply(classificar_risco)
-
-            # 🔗 LINK CLICÁVEL
-            if "Link" in df.columns:
-                df["Processo"] = df.apply(
-                    lambda x: f'<a href="{x["Link"]}" target="_blank">{x["Processo"]}</a>',
-                    axis=1
-                )
-                df = df.drop(columns=["Link"])
+            # remover duplicados
+            df = df.drop_duplicates(subset=["Processo"])
 
             st.subheader("Resultados encontrados")
-            st.write(df.to_html(escape=False, index=False), unsafe_allow_html=True)
+
+            st.dataframe(df)
 
         else:
             st.warning("Nenhum processo encontrado")
