@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import unicodedata
 from datetime import datetime
+import time
 
 from tribunais.tjsp import buscar_tjsp
 
@@ -59,6 +60,19 @@ def normalizar_nome(nome):
     nome = "".join([c for c in nome if not unicodedata.combining(c)])
     return nome.strip()
 
+def gerar_variacoes(nome):
+    partes = nome.split()
+
+    variacoes = [nome]
+
+    if len(partes) > 1:
+        variacoes.append(partes[0] + " " + partes[-1])
+
+    if len(partes) > 2:
+        variacoes.append(partes[-1] + " " + partes[0])
+
+    return list(set(variacoes))
+
 def identificar_banco(texto):
     if not texto:
         return ""
@@ -83,13 +97,25 @@ if st.button("Pesquisar processos"):
         st.warning("Digite um nome")
     else:
 
-        nome_busca = normalizar_nome(nome)
+        nome_normalizado = normalizar_nome(nome)
+        variacoes = gerar_variacoes(nome_normalizado)
 
-        st.write("Busca realizada por:")
-        st.write(nome_busca)
+        st.write("Variações utilizadas:")
+        st.write(variacoes)
 
-        # 🔥 APENAS UMA CONSULTA (SEM BLOQUEIO)
-        resultados = buscar_tjsp(nome_busca)
+        resultados = []
+
+        # 🔥 CONSULTA COM DELAY (ANTI-BLOQUEIO)
+        for i, v in enumerate(variacoes):
+
+            st.write(f"Consultando: {v}")
+
+            dados = buscar_tjsp(v)
+            resultados.extend(dados)
+
+            # ⏱️ DELAY ENTRE CONSULTAS
+            if i < len(variacoes) - 1:
+                time.sleep(2)
 
         if resultados:
 
