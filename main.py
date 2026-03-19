@@ -18,33 +18,17 @@ st.write("Busca de processos que possam suspender leilões de imóveis")
 # INPUTS
 # -------------------------------
 
-nome = st.text_input("Nome do Devedor (obrigatório)")
-cpf = st.text_input("CPF ou CNPJ (opcional)")
-matricula = st.text_input("Matrícula do imóvel")
-data_leilao = st.date_input("Data do leilão")
-
-# -------------------------------
-# DATA BR
-# -------------------------------
-
-if data_leilao:
-    data_formatada = data_leilao.strftime("%d/%m/%Y")
-    st.info(f"Data do leilão selecionada: {data_formatada}")
-
-    dias = (data_leilao - datetime.today().date()).days
-
-    if dias <= 0:
-        st.error("⚠️ Risco máximo: leilão em 0 dias")
-    elif dias <= 10:
-        st.warning(f"Atenção: leilão em {dias} dias")
-    else:
-        st.success(f"Leilão em {dias} dias")
+nome = st.text_input("Nome do Devedor (ou avalista / garantidor / fiador / emitente / cônjuge)")
+cpf = st.text_input("Números do CPF ou CNPJ")
+matricula = st.text_input("Matrícula do local")
+data_leilao = st.date_input("Dados do")
 
 # -------------------------------
 # FUNÇÕES
 # -------------------------------
 
 def normalizar_nome(nome):
+
     nome = nome.lower()
     nome = unicodedata.normalize('NFKD', nome)
     nome = "".join([c for c in nome if not unicodedata.combining(c)])
@@ -57,7 +41,9 @@ def normalizar_nome(nome):
 
 
 def gerar_variacoes(nome):
+
     nome = normalizar_nome(nome)
+
     partes = nome.split()
 
     variacoes = []
@@ -79,26 +65,25 @@ def gerar_variacoes(nome):
 if st.button("Pesquisar processos"):
 
     if not nome:
-        st.warning("Digite o nome para busca")
+        st.warning("Digite um nome para buscar")
     else:
 
         variacoes = gerar_variacoes(nome)
 
-        st.write("Variações utilizadas:")
+        st.write("Variações do nome utilizado na busca:")
         st.write(variacoes)
 
         resultados = []
 
-        # 🔥 BUSCA (VERSÃO QUE FUNCIONAVA)
+        # 🔥 ESSA É A LÓGICA ORIGINAL QUE FUNCIONAVA
         for v in variacoes:
-            dados = buscar_tjsp(v)
-            resultados.extend(dados)
+            processos = buscar_tjsp(v)
+            resultados.extend(processos)
 
         if resultados:
 
             df = pd.DataFrame(resultados)
 
-            # remover duplicados
             df = df.drop_duplicates(subset=["Processo"])
 
             st.subheader("Resultados encontrados")
