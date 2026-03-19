@@ -41,6 +41,38 @@ if data_leilao:
         st.success(f"Leilão em {dias} dias")
 
 # -------------------------------
+# FUNÇÕES
+# -------------------------------
+
+def normalizar_nome(nome):
+    nome = nome.lower()
+    nome = unicodedata.normalize('NFKD', nome)
+    nome = "".join([c for c in nome if not unicodedata.combining(c)])
+
+    remover = [" de ", " da ", " dos ", " das "]
+    for r in remover:
+        nome = nome.replace(r, " ")
+
+    return nome.strip()
+
+
+def gerar_variacoes(nome):
+    nome = normalizar_nome(nome)
+    partes = nome.split()
+
+    variacoes = []
+
+    variacoes.append(nome)
+
+    if len(partes) > 1:
+        variacoes.append(partes[0] + " " + partes[-1])
+
+    if len(partes) > 2:
+        variacoes.append(partes[-1] + " " + partes[0])
+
+    return list(set(variacoes))
+
+# -------------------------------
 # BOTÃO
 # -------------------------------
 
@@ -50,8 +82,17 @@ if st.button("Pesquisar processos"):
         st.warning("Digite o nome para busca")
     else:
 
-        # 🔥 BUSCA SIMPLES (FUNCIONA)
-        resultados = buscar_tjsp(nome)
+        variacoes = gerar_variacoes(nome)
+
+        st.write("Variações do nome utilizadas na busca:")
+        st.write(variacoes)
+
+        resultados = []
+
+        # 🔥 LOOP ORIGINAL QUE FUNCIONAVA
+        for v in variacoes:
+            dados = buscar_tjsp(v)
+            resultados.extend(dados)
 
         if resultados:
 
@@ -62,16 +103,7 @@ if st.button("Pesquisar processos"):
 
             st.subheader("Resultados encontrados")
 
-            # 🔗 EXIBIÇÃO SIMPLES E FUNCIONAL
-            for _, row in df.iterrows():
-
-                st.markdown(f"""
-                **Tribunal:** {row.get('Tribunal', '')}  
-                **Processo:** [{row.get('Processo', '')}]({row.get('Link', '')})  
-                **Classe:** {row.get('Classe', '')}  
-                **Data:** {row.get('Data', '')}  
-                ---
-                """)
+            st.dataframe(df)
 
         else:
             st.warning("Nenhum processo encontrado")
