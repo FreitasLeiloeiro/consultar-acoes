@@ -3,11 +3,10 @@ import pandas as pd
 import unicodedata
 from datetime import datetime
 
-# 🔗 IMPORTAÇÃO DO TJSP
 from tribunais.tjsp import buscar_tjsp
 
 # -------------------------------
-# CONFIG INICIAL
+# CONFIG
 # -------------------------------
 
 st.set_page_config(page_title="Consultar Ações", layout="centered")
@@ -25,7 +24,7 @@ matricula = st.text_input("Matrícula do imóvel")
 data_leilao = st.date_input("Data do leilão")
 
 # -------------------------------
-# DATA NO PADRÃO BR
+# DATA BR
 # -------------------------------
 
 if data_leilao:
@@ -42,71 +41,32 @@ if data_leilao:
         st.success(f"Leilão em {dias} dias")
 
 # -------------------------------
-# LISTA DE BANCOS
+# BANCOS
 # -------------------------------
 
 bancos = [
-    "bradesco",
-    "itau",
-    "santander",
-    "caixa economica",
-    "caixa econômica",
-    "banco do brasil",
-    "bb",
-    "hsbc",
-    "inter",
-    "nubank",
-    "pan",
-    "votorantim",
-    "original",
-    "daycoval",
-    "mercantil",
+    "bradesco","itau","santander","caixa","banco do brasil",
+    "bb","inter","nubank","pan","votorantim"
 ]
 
 # -------------------------------
-# FUNÇÕES AUXILIARES
+# FUNÇÕES
 # -------------------------------
 
 def normalizar_nome(nome):
     nome = nome.lower()
     nome = unicodedata.normalize('NFKD', nome)
     nome = "".join([c for c in nome if not unicodedata.combining(c)])
-
-    remover = [" de ", " da ", " dos ", " das "]
-    for r in remover:
-        nome = nome.replace(r, " ")
-
     return nome.strip()
-
-
-def gerar_variacoes(nome):
-    nome = normalizar_nome(nome)
-    partes = nome.split()
-
-    variacoes = []
-    variacoes.append(nome)
-
-    if len(partes) > 1:
-        variacoes.append(partes[0] + " " + partes[-1])
-
-    if len(partes) > 2:
-        variacoes.append(partes[-1] + " " + partes[0])
-
-    return list(set(variacoes))
-
 
 def identificar_banco(texto):
     if not texto:
         return ""
-
     texto = texto.lower()
-
     for banco in bancos:
         if banco in texto:
             return banco.upper()
-
     return ""
-
 
 def classificar_risco(row):
     if row["Banco"]:
@@ -114,35 +74,29 @@ def classificar_risco(row):
     return "🟢 BAIXO"
 
 # -------------------------------
-# BOTÃO DE BUSCA
+# BOTÃO
 # -------------------------------
 
 if st.button("Pesquisar processos"):
 
     if not nome:
-        st.warning("Digite um nome para busca")
+        st.warning("Digite um nome")
     else:
 
-        variacoes = gerar_variacoes(nome)
+        nome_busca = normalizar_nome(nome)
 
-        st.write("Variações do nome utilizadas na busca:")
-        st.write(variacoes)
+        st.write("Busca realizada por:")
+        st.write(nome_busca)
 
-        resultados = []
-
-        # 🔎 CONSULTA TJSP
-        for v in variacoes:
-            dados_tjsp = buscar_tjsp(v)
-            resultados.extend(dados_tjsp)
+        # 🔥 APENAS UMA CONSULTA (SEM BLOQUEIO)
+        resultados = buscar_tjsp(nome_busca)
 
         if resultados:
 
             df = pd.DataFrame(resultados)
 
-            # 🔥 REMOVER DUPLICADOS
             df = df.drop_duplicates(subset=["Processo"])
 
-            # 🏦 DETECTAR BANCO
             df["Banco"] = df.apply(
                 lambda row: identificar_banco(
                     str(row.get("Autor", "")) + " " + str(row.get("Réu", ""))
@@ -150,14 +104,11 @@ if st.button("Pesquisar processos"):
                 axis=1
             )
 
-            # ⚠️ CLASSIFICAR RISCO
             df["Risco"] = df.apply(classificar_risco, axis=1)
 
             st.subheader("Resultados encontrados")
 
-            # 🔗 EXIBIÇÃO COM LINK
             for _, row in df.iterrows():
-
                 st.markdown(f"""
                 **Tribunal:** {row['Tribunal']}  
                 **Processo:** [{row['Processo']}]({row['Link']})  
