@@ -1,61 +1,156 @@
 import streamlit as st
+import pandas as pd
+import unicodedata
+from datetime import datetime
 
-st.set_page_config(page_title="Monitor de Oportunidades Jurídicas", layout="centered")
+# 🔗 IMPORT DO TJSP
+from tribunais.tjsp import buscar_tjsp
 
-st.title("Monitor de Oportunidades Jurídicas")
-st.write("Busca em Diários de Justiça (DJE) para identificar ações relevantes")
+# -------------------------------
+# CONFIGURAÇÃO
+# -------------------------------
 
-nome = st.text_input("Nome da parte")
-banco = st.text_input("Banco (ex: Bradesco)")
+st.set_page_config(page_title="Consultar Ações", layout="centered")
 
-if st.button("Buscar no DJE"):
+st.title("Consultar Ações")
+st.write("Busca de processos que possam suspender leilões de imóveis")
 
-    termo = f"{nome} {banco}".strip().replace(" ", "+")
+# -------------------------------
+# INPUTS
+# -------------------------------
 
-    st.success("Buscar nos Diários de Justiça:")
+nome = st.text_input("Nome do Devedor (ou avalista / garantidor / fiador / emitente / cônjuge)")
+cpf = st.text_input("CPF ou CNPJ somente números")
+matricula = st.text_input("Matrícula do imóvel")
+data_leilao = st.date_input("Data do leilão")
 
-    # TJSP DJE
-    st.markdown("### 📘 TJSP - Diário da Justiça")
-    st.markdown(
-        f"👉 https://www.dje.tjsp.jus.br/cdje/index.do?buscaLivre={termo}"
-    )
+# -------------------------------
+# DATA BRASIL + ALERTA
+# -------------------------------
 
-    # TJRJ DJE
-    st.markdown("### 📘 TJRJ - Diário da Justiça")
-    st.markdown(
-        f"👉 https://www4.tjrj.jus.br/ejud/ConsultaDiario.aspx?busca={termo}"
-    )
+if data_leilao:
+    data_formatada = data_leilao.strftime("%d/%m/%Y")
+    st.info(f"Data do leilão selecionada: {data_formatada}")
 
-    # TJMG DJE
-    st.markdown("### 📘 TJMG - Diário da Justiça")
-    st.markdown(
-        f"👉 https://www.tjmg.jus.br/portal-tjmg/servicos/diario-do-judiciario/?q={termo}"
-    )
+    dias = (data_leilao - datetime.today().date()).days
 
-    st.markdown("---")
+    if dias <= 0:
+        st.error("⚠ Risco máximo: leilão em 0 dias")
+    elif dias <= 10:
+        st.warning(f"Atenção: leilão em {dias} dias")
 
-    st.markdown("### 🎯 O que procurar:")
-    st.markdown("""
-    - Ação Anulatória de Consolidação de Propriedade 🔴
-    - Ação de Anulação de Leilão Extrajudicial 🔴
-    - Ação Declaratória de Nulidade de Ato Jurídico 🔴
-    - Ausência de Intimação Pessoal 🔴
-    - Vício na Consolidação da Propriedade 🔴
-    - Preço Vil 🔴
-    - Teoria do Adimplemento Substancial 🔴
-    - Irregularidade no Edital 🔴
-    - Tutela de Urgência Antecipada 🔴
-    - Perigo da Demora 🔴
-    - Probabilidade do Direito 🔴
-    - Direito de Preferência 🔴
-    - Purgação da Mora (ou Purga da Mora) 🔴
-    - Consignação em Pagamento 🔴
-    - Vício de Edital (Ausência de Publicidade) 🔴
-    - Agravo de Instrumento com Pedido de Efeito Suspensivo 🔴
-    - Averbação Premonitória (Art. 828 do CPC) 🔴
-    - Teoria do Desvio Produtivo do Consumidor
-    - Sustação de leilão 🔴  
-    - Revisional 🔴  
-    - Alienação fiduciária 🔴  
-    - Busca e apreensão 🟡  
-    """)
+# -------------------------------
+# NORMALIZAÇÃO
+# -------------------------------
+
+def normalizar_nome(nome):
+    nome = nome.lower()
+    nome = unicodedata.normalize('NFKD', nome)
+    nome = "".join([c for c in nome if not unicodedata.combining(c)])
+
+    remover = [" de ", " da ", " dos ", " das "]
+    for r in remover:
+        nome = nome.replace(r, " ")
+
+    return nome.strip()
+
+def gerar_variacoes(nome):
+    nome = normalizar_nome(nome)
+    partes = nome.split()
+
+    variacoes = [nome]
+
+    if len(partes) > 1:
+        variacoes.append(partes[0] + " " + partes[-1])
+
+    if len(partes) > 2:
+        variacoes.append(partes[-1] + " " + partes[0])
+
+    return list(set(variacoes))
+
+# -------------------------------
+# CLASSIFICAÇÃO DE RISCO
+# -------------------------------
+
+def classificar_risco(texto):
+
+    texto = texto.lower()
+
+    alto = [
+        "revisional",
+        "anulat",
+        "nulidade",
+        "sustação",
+        "liminar",
+        "tutela"
+    ]
+
+    medio = [
+        "embargos",
+        "execução"
+    ]
+
+    if any(p in texto for p in alto):
+        return "🔴 ALTO"
+
+    elif any(p in texto for p in medio):
+        return "🟠 MÉDIO"
+
+    else:
+        return "🟢 BAIXO"
+
+# -------------------------------
+# BUSCA
+# -------------------------------
+
+if st.button("Pesquisar processos"):
+
+    if not nome:
+        st.warning("Digite um nome para buscar")
+
+    else:
+        variacoes = gerar_variacoes(nome)
+
+        st.write("Variações do nome utilizadas na busca:")
+        st.write(variacoes)
+
+        resultados = []
+
+        # 🔥 BUSCA EM TODAS VARIAÇÕES
+        for v in variacoes:
+            try:
+                resultados += buscar_tjsp(v)
+            except Exception as e:
+                st.warning(f"Erro ao consultar TJSP: {e}")
+
+        # -------------------------------
+        # RESULTADOS
+        # -------------------------------
+
+        if resultados:
+
+            df = pd.DataFrame(resultados)
+
+            # 🚀 REMOVER DUPLICADOS
+            df = df.drop_duplicates(subset=["Processo", "Tribunal"])
+
+            # 🎯 CLASSIFICAR RISCO
+            df["Risco"] = df["Classe"].apply(classificar_risco)
+
+            # 🔗 LINK CLICÁVEL
+            if "Link" in df.columns:
+                df["Processo"] = df.apply(
+                    lambda x: f'<a href="{x["Link"]}" target="_blank">{x["Processo"]}</a>',
+                    axis=1
+                )
+                df = df.drop(columns=["Link"])
+
+            st.subheader("Resultados encontrados")
+
+            st.write(
+                df.to_html(escape=False, index=False),
+                unsafe_allow_html=True
+            )
+
+        else:
+            st.warning("Nenhum processo encontrado")
